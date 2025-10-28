@@ -28,9 +28,9 @@ pusher_client = pusher.Pusher(
 def recibir_mensaje():
     data = request.get_json() or {}
 
-    # Obtener datos
+    # Obtener datos del mensaje y canal
     message = data.get("message", "")
-    canal = data.get("canal", "my-channel")  # Canal por defecto si no se envía
+    canal = data.get("canal", "default-channel")  # Canal correcto según el chat
 
     if not message:
         return jsonify({"error": "Mensaje vacío"}), 400
@@ -47,7 +47,7 @@ def recibir_mensaje():
         print("❌ Error al guardar en base de datos:", e)
         return jsonify({"error": "No se pudo guardar el mensaje"}), 500
 
-    # Enviar al canal correspondiente
+    # Enviar al canal correspondiente en Pusher
     try:
         pusher_client.trigger(canal, 'my-event', {"message": message})
     except Exception as e:
