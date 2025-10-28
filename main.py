@@ -14,46 +14,56 @@ db_config = {
     "database": "rodriguez_tareasisi"
 }
 
-# --- Ruta principal: recibe mensaje ---
+# --- Inicializar Pusher solo una vez ---
+pusher_client = pusher.Pusher(
+    app_id='2065491',
+    key='08f9ca3827443d276de3',
+    secret='63d6cd6ed91c56e3521d',
+    cluster='mt1',
+    ssl=True
+)
+
+# --- Ruta principal: recibe y reenvía mensaje ---
 @app.route("/", methods=["POST"])
 def recibir_mensaje():
-    data = request.get_json()
+    data = request.get_json() or {}
 
-    # Inicializar Pusher
-    pusher_client = pusher.Pusher(
-        app_id='2065491',
-        key='08f9ca3827443d276de3',
-        secret='63d6cd6ed91c56e3521d',
-        cluster='mt1',
-        ssl=True
-    )
+    # Obtener datos
+    message = data.get("message", "")
+    canal = data.get("canal", "my-channel")  # Canal por defecto si no se envía
 
-    # Obtener mensaje del JSON recibido
-    message = data.get("message", "") if data else ""
+    if not message:
+        return jsonify({"error": "Mensaje vacío"}), 400
 
-    # Guardar en la base de datos
+    # Guardar en base de datos
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor()
-        cursor.execute("INSERT INTO mensajes (mensaje) VALUES (%s)", (message,))
+        cursor.execute("INSERT INTO mensajes (mensaje, canal) VALUES (%s, %s)", (message, canal))
         conn.commit()
         cursor.close()
         conn.close()
     except Exception as e:
         print("❌ Error al guardar en base de datos:", e)
+        return jsonify({"error": "No se pudo guardar el mensaje"}), 500
 
-    # Enviar a Pusher
-    pusher_client.trigger('my-channel', 'my-event', message)
-    return jsonify({"status": "ok", "mensaje": message})
+    # Enviar al canal correspondiente
+    try:
+        pusher_client.trigger(canal, 'my-event', {"message": message})
+    except Exception as e:
+        print("❌ Error al enviar mensaje a Pusher:", e)
+        return jsonify({"error": "Error al enviar a Pusher"}), 500
+
+    return jsonify({"status": "ok", "canal": canal, "mensaje": message})
 
 
-# --- Nueva ruta: listar mensajes ---
+# --- Ruta para listar mensajes ---
 @app.route("/mensajes", methods=["GET"])
 def listar_mensajes():
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT id, mensaje, fecha FROM mensajes ORDER BY fecha DESC")
+        cursor.execute("SELECT id, mensaje, canal, fecha FROM mensajes ORDER BY fecha DESC")
         mensajes = cursor.fetchall()
         cursor.close()
         conn.close()
