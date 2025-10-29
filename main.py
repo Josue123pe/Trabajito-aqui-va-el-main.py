@@ -49,7 +49,7 @@ def recibir_mensaje():
 
     # Enviar al canal correspondiente en Pusher
     try:
-        pusher_client.trigger(canal, 'my-event', {"message": message})
+        pusher_client.trigger(canal, 'my-event', message)
     except Exception as e:
         print("❌ Error al enviar mensaje a Pusher:", e)
         return jsonify({"error": "Error al enviar a Pusher"}), 500
